@@ -2,8 +2,8 @@ Package: com.rpetrich.swipeback
 Priority: optional
 Section: System
 Architecture: iphoneos-arm
-Version: 0.1
-Description: Swipe onto screen to go back
+Version: 0.9
+Description: Swipe onto screen from left edge to go back
 Name: SwipeBack
 Depends: firmware (>= 4.0), mobilesubstrate
 Author: Ryan Petrich <rpetrich+swipeback@gmail.com>

@@ -16,6 +16,7 @@ __attribute__((visibility("hidden")))
 	CAGradientLayer *gradientLayer;
 	UIView *underView;
 	CGFloat offset;
+	BOOL isRoot;
 }
 @property (nonatomic, assign) UINavigationController *navigationController;
 @end
@@ -35,14 +36,27 @@ __attribute__((visibility("hidden")))
 	if (offset < 10.0f) {
 		NSArray *viewControllers = navigationController.viewControllers;
 		NSInteger viewControllerCount = viewControllers.count;
-		if ((viewControllerCount >= 2) && !navigationController.modalViewController) {
+		if (!navigationController.modalViewController) {
 			UIView *view = navigationController.topViewController.view.superview;
 			view.clipsToBounds = YES;
 			CGRect frame = view.frame;
+			isRoot = viewControllerCount < 2;
+			UIViewController *viewController = isRoot ? nil : [viewControllers objectAtIndex:viewControllerCount-2];
+#ifdef USE_PRIVATE
+			[viewController viewWillAppear:NO];
+#endif
 			[underView release];
-			underView = [[[viewControllers objectAtIndex:viewControllerCount-2] view] retain];
-			underView.frame = frame;
+			if (isRoot) {
+				underView = [[UIView alloc] initWithFrame:frame];
+				underView.backgroundColor = [UIColor scrollViewTexturedBackgroundColor];
+			} else {
+				underView = [viewController.view retain];
+				underView.frame = frame;
+			}
 			[view.superview insertSubview:underView belowSubview:view];
+#ifdef USE_PRIVATE
+			[viewController viewDidAppear:YES];
+#endif
 			if (!gradientLayer) {
 				gradientLayer = [[CAGradientLayer alloc] init];
 				gradientLayer.startPoint = (CGPoint){0.0f, 0.0f};
@@ -69,6 +83,10 @@ __attribute__((visibility("hidden")))
 	UIView *view = navigationController.topViewController.view.superview;
 	CGRect frame = view.frame;
 	frame.origin.x = currentOffset - offset;
+	if (isRoot)
+		frame.origin.x *= (1.0f / 3.0f);
+	if (frame.origin.x < 0.0f)
+		frame.origin.x = 0.0f;
 	view.frame = frame;
 	frame.size.width = 15.0f;
 	frame.origin.x -= 15.0f;
@@ -83,7 +101,8 @@ __attribute__((visibility("hidden")))
 	UIView *view = navigationController.topViewController.view.superview;
 	CGRect frame = view.frame;
 	frame.origin.x = (state == UIGestureRecognizerStateEnded) ? frame.size.width : 0.0f;
-	[UIView animateWithDuration:1.0/3.0 delay:0.0 options:UIViewAnimationOptionCurveEaseInOut animations:^{
+	NSTimeInterval duration = isRoot ? (1.0 / 5.0) : (1.0 / 3.0);
+	[UIView animateWithDuration:duration delay:0.0 options:UIViewAnimationOptionCurveEaseInOut animations:^{
 #ifdef USE_PRIVATE
 		if (state == UIGestureRecognizerStateEnded) {
 			UINavigationBar *bar = navigationController.navigationBar;
@@ -100,7 +119,7 @@ __attribute__((visibility("hidden")))
 	frame.size.width = 15.0f;
 	frame.origin.x -= 15.0f;
 	[CATransaction begin];
-	[CATransaction setAnimationDuration:1.0/3.0];
+	[CATransaction setAnimationDuration:duration];
 	[CATransaction setAnimationTimingFunction:[CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseInEaseOut]];
 	[CATransaction setCompletionBlock:^{
 		[gradientLayer removeFromSuperlayer];
@@ -112,7 +131,10 @@ __attribute__((visibility("hidden")))
 				{
 #ifdef USE_PRIVATE
 					NSMutableArray *viewControllers = [navigationController.viewControllers mutableCopy];
+					UIViewController *viewController = [viewControllers lastObject];
 					[viewControllers removeObjectAtIndex:viewControllers.count-1];
+					[viewController viewWillDisappear:NO];
+					[viewController viewDidDisappear:NO];
 					[navigationController setViewControllers:viewControllers animated:NO];
 					[viewControllers release];
 #else
@@ -134,7 +156,7 @@ __attribute__((visibility("hidden")))
 
 - (void)touchesEnded:(NSSet *)touches withEvent:(UIEvent *)event
 {
-	[self completeWithState:([self locationInView:navigationController.view].x > 100.0f) ? UIGestureRecognizerStateEnded : UIGestureRecognizerStateCancelled];
+	[self completeWithState:(([self locationInView:navigationController.view].x > 100.0f) && !isRoot) ? UIGestureRecognizerStateEnded : UIGestureRecognizerStateCancelled];
 }
 
 - (void)touchesCancelled:(NSSet *)touches withEvent:(UIEvent *)event

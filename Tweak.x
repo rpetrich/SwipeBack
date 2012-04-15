@@ -143,6 +143,7 @@ __attribute__((visibility("hidden")))
 				}
 			                completion:NULL];
 			[view removeFromSuperview];
+			[navigationController setNavigationBarHidden:NO animated:YES];
 		} else {
 			[underView removeFromSuperview];
 		}

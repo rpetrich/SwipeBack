@@ -172,6 +172,7 @@ __attribute__((visibility("hidden")))
 - (void)dealloc
 {
 	[gradientLayer removeFromSuperlayer];
+	[gradientLayer release];
 	[super dealloc];
 }
 

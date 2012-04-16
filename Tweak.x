@@ -17,6 +17,7 @@ __attribute__((visibility("hidden")))
 	CAGradientLayer *gradientLayer;
 	CAGradientLayer *rightGradientLayer;
 	CAGradientLayer *shadowLayer;
+	CAGradientLayer *navigationBarShadow;
 	UIView *underView;
 	UIView *movingView;
 	CGFloat offset;
@@ -27,6 +28,7 @@ __attribute__((visibility("hidden")))
 @property (nonatomic, retain) UIViewController *restorableViewController;
 @property (nonatomic, readonly) CAGradientLayer *gradientLayer;
 @property (nonatomic, readonly) CAGradientLayer *rightGradientLayer;
+@property (nonatomic, readonly) CAGradientLayer *navigationBarShadow;
 @end
 
 @implementation SwipeBackGestureRecognizer
@@ -61,6 +63,17 @@ __attribute__((visibility("hidden")))
 	return rightGradientLayer;
 }
 
+- (CAGradientLayer *)navigationBarShadow
+{
+	if (!navigationBarShadow) {
+		navigationBarShadow = [[CAGradientLayer alloc] init];
+		navigationBarShadow.startPoint = (CGPoint){0.0f, 1.0f};
+		navigationBarShadow.endPoint = (CGPoint){0.0f, 0.0f};
+		navigationBarShadow.colors = [NSArray arrayWithObjects:(id)[[UIColor colorWithWhite:0.0f alpha:0.0f] CGColor], (id)[[UIColor colorWithWhite:0.0f alpha:0.1f] CGColor], (id)[[UIColor colorWithWhite:0.0f alpha:0.25f] CGColor], nil];
+	}
+	return navigationBarShadow;
+}
+
 - (void)touchesBegan:(NSSet *)touches withEvent:(UIEvent *)event
 {
 	UIView *navView = navigationController.view;
@@ -91,14 +104,22 @@ __attribute__((visibility("hidden")))
 #ifdef USE_PRIVATE
 			[viewController viewDidAppear:YES];
 #endif
-			frame.size.width = 15.0f;
-			frame.origin.x -= 15.0f;
+			CGRect shadowFrame = frame;
+			shadowFrame.size.width = 15.0f;
+			shadowFrame.origin.x -= 15.0f;
 			[CATransaction begin];
 			[CATransaction setValue:(id)kCFBooleanTrue forKey:kCATransactionDisableActions];
 			shadowLayer = self.gradientLayer;
 			shadowLayer.opacity = 1.0f;
-			shadowLayer.frame = frame;
+			shadowLayer.frame = shadowFrame;
 			[view.superview.layer insertSublayer:shadowLayer below:view.layer];
+			if (isRoot) {
+				CALayer *navShadow = self.navigationBarShadow;
+				shadowFrame = frame;
+				shadowFrame.size.height = 15.0f;
+				navShadow.frame = shadowFrame;
+				[view.superview.layer insertSublayer:navShadow below:view.layer];
+			}
 			[CATransaction commit];
 			gestureIsRestoring = NO;
 			self.state = UIGestureRecognizerStateBegan;
@@ -111,6 +132,7 @@ __attribute__((visibility("hidden")))
 			CGRect frame = view.frame;
 			isRoot = !restorableViewController;
 			[underView release];
+			CGRect shadowFrame = frame;
 			if (isRoot) {
 				underView = [[UIView alloc] initWithFrame:frame];
 				underView.backgroundColor = [UIColor scrollViewTexturedBackgroundColor];
@@ -121,6 +143,10 @@ __attribute__((visibility("hidden")))
 				[CATransaction begin];
 				[CATransaction setValue:(id)kCFBooleanTrue forKey:kCATransactionDisableActions];
 				shadowLayer = self.rightGradientLayer;
+				CALayer *navShadow = self.navigationBarShadow;
+				shadowFrame.size.height = 15.0f;
+				navShadow.frame = shadowFrame;
+				[view.superview.layer insertSublayer:navShadow below:view.layer];
 			} else {
 				underView = [view retain];
 				movingView = [restorableViewController.view retain];
@@ -252,6 +278,7 @@ __attribute__((visibility("hidden")))
 		underView = nil;
 		[movingView release];
 		movingView = nil;
+		[navigationBarShadow removeFromSuperlayer];
 	}];
 	shadowLayer.frame = frame;
 	shadowLayer.opacity = 0.0f;
@@ -284,6 +311,10 @@ __attribute__((visibility("hidden")))
 - (void)dealloc
 {
 	[restorableViewController release];
+	[navigationBarShadow removeFromSuperlayer];
+	[navigationBarShadow release];
+	[rightGradientLayer removeFromSuperlayer];
+	[rightGradientLayer release];
 	[gradientLayer removeFromSuperlayer];
 	[gradientLayer release];
 	[movingView release];

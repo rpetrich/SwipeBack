@@ -3,7 +3,7 @@ Priority: optional
 Section: System
 Architecture: iphoneos-arm
 Version: 0.9
-Description: Swipe onto screen from left edge to go back
+Description: Swipe onto screen from left edge to go back, onto screen from right to return to where you were
 Name: SwipeBack
 Depends: firmware (>= 4.0), mobilesubstrate
 Author: Ryan Petrich <rpetrich+swipeback@gmail.com>

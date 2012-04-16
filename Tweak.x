@@ -23,11 +23,13 @@ __attribute__((visibility("hidden")))
 	BOOL gestureIsRestoring;
 }
 @property (nonatomic, assign) UINavigationController *navigationController;
+@property (nonatomic, retain) UIViewController *restorableViewController;
 @end
 
 @implementation SwipeBackGestureRecognizer
 
 @synthesize navigationController;
+@synthesize restorableViewController;
 
 - (BOOL)delaysTouchesBegan
 {
@@ -290,6 +292,14 @@ static void *SwipeBackGestureRecognizerKey;
 		objc_setAssociatedObject(self, &SwipeBackGestureRecognizerKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 	}
 	%orig;
+}
+
+- (UIViewController *)_popViewControllerWithTransition:(int)transitionType allowPoppingLast:(BOOL)allowPoppingLast
+{
+	UIViewController *result = %orig;
+	SwipeBackGestureRecognizer *recognizer = objc_getAssociatedObject(self, &SwipeBackGestureRecognizerKey);
+	recognizer.restorableViewController = result;
+	return result;
 }
 
 %end

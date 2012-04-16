@@ -13,10 +13,14 @@ __attribute__((visibility("hidden")))
 @interface SwipeBackGestureRecognizer : UIGestureRecognizer {
 @private
 	UINavigationController *navigationController;
+	UIViewController *restorableViewController;
 	CAGradientLayer *gradientLayer;
+	CAGradientLayer *rightGradientLayer;
 	UIView *underView;
+	UIView *movingView;
 	CGFloat offset;
 	BOOL isRoot;
+	BOOL gestureIsRestoring;
 }
 @property (nonatomic, assign) UINavigationController *navigationController;
 @end
@@ -32,12 +36,15 @@ __attribute__((visibility("hidden")))
 
 - (void)touchesBegan:(NSSet *)touches withEvent:(UIEvent *)event
 {
-	offset = [self locationInView:navigationController.view].x;
-	if (offset < 10.0f) {
-		NSArray *viewControllers = navigationController.viewControllers;
-		NSInteger viewControllerCount = viewControllers.count;
-		if (!navigationController.modalViewController) {
+	UIView *navView = navigationController.view;
+	offset = [self locationInView:navView].x;
+	if (!navigationController.modalViewController) {
+		if (offset < 10.0f) {
+			NSArray *viewControllers = navigationController.viewControllers;
+			NSInteger viewControllerCount = viewControllers.count;
 			UIView *view = navigationController.topViewController.view.superview;
+			[movingView release];
+			movingView = [view retain];
 			view.clipsToBounds = YES;
 			CGRect frame = view.frame;
 			isRoot = viewControllerCount < 2;
@@ -70,6 +77,40 @@ __attribute__((visibility("hidden")))
 			gradientLayer.frame = frame;
 			[view.superview.layer insertSublayer:gradientLayer below:view.layer];
 			[CATransaction commit];
+			gestureIsRestoring = NO;
+			self.state = UIGestureRecognizerStateBegan;
+			return;
+		}
+		if (offset > navView.bounds.size.width - 10.0f) {
+			UIView *view = navigationController.topViewController.view.superview;
+			[movingView release];
+			movingView = [view retain];
+			view.clipsToBounds = YES;
+			CGRect frame = view.frame;
+			isRoot = !restorableViewController;
+			[underView release];
+			if (isRoot) {
+				underView = [[UIView alloc] initWithFrame:frame];
+				underView.backgroundColor = [UIColor scrollViewTexturedBackgroundColor];
+			} else {
+				underView = [restorableViewController.view retain];
+				underView.frame = frame;
+			}
+			[view.superview insertSubview:underView belowSubview:view];
+			if (!rightGradientLayer) {
+				rightGradientLayer = [[CAGradientLayer alloc] init];
+				rightGradientLayer.startPoint = (CGPoint){1.0f, 0.0f};
+				rightGradientLayer.endPoint = (CGPoint){0.0f, 0.0f};
+				rightGradientLayer.colors = [NSArray arrayWithObjects:(id)[[UIColor colorWithWhite:0.0f alpha:0.0f] CGColor], (id)[[UIColor colorWithWhite:0.0f alpha:0.1f] CGColor], (id)[[UIColor colorWithWhite:0.0f alpha:0.25f] CGColor], nil];
+			}
+			frame.origin.x += frame.size.width;
+			frame.size.width = 15.0f;
+			[CATransaction begin];
+			[CATransaction setValue:(id)kCFBooleanTrue forKey:kCATransactionDisableActions];
+			rightGradientLayer.frame = frame;
+			[view.superview.layer insertSublayer:rightGradientLayer below:view.layer];
+			[CATransaction commit];
+			gestureIsRestoring = YES;
 			self.state = UIGestureRecognizerStateBegan;
 			return;
 		}
@@ -80,27 +121,40 @@ __attribute__((visibility("hidden")))
 - (void)touchesMoved:(NSSet *)touches withEvent:(UIEvent *)event
 {
 	CGFloat currentOffset = [self locationInView:navigationController.view].x;
-	UIView *view = navigationController.topViewController.view.superview;
-	CGRect frame = view.frame;
+	CGRect frame = movingView.frame;
 	frame.origin.x = currentOffset - offset;
 	if (isRoot)
 		frame.origin.x *= (1.0f / 3.0f);
-	if (frame.origin.x < 0.0f)
-		frame.origin.x = 0.0f;
-	view.frame = frame;
-	frame.size.width = 15.0f;
-	frame.origin.x -= 15.0f;
-	[CATransaction begin];
-	[CATransaction setValue:(id)kCFBooleanTrue forKey:kCATransactionDisableActions];
-	gradientLayer.frame = frame;
+	if (gestureIsRestoring) {
+		if (frame.origin.x > 0.0f)
+			frame.origin.x = 0.0f;
+		movingView.frame = frame;
+		frame.origin.x += frame.size.width;
+		frame.size.width = 15.0f;
+		[CATransaction begin];
+		[CATransaction setValue:(id)kCFBooleanTrue forKey:kCATransactionDisableActions];
+		rightGradientLayer.frame = frame;
+	} else {
+		if (frame.origin.x < 0.0f)
+			frame.origin.x = 0.0f;
+		movingView.frame = frame;
+		frame.size.width = 15.0f;
+		frame.origin.x -= 15.0f;
+		[CATransaction begin];
+		[CATransaction setValue:(id)kCFBooleanTrue forKey:kCATransactionDisableActions];
+		gradientLayer.frame = frame;
+	}
 	[CATransaction commit];
 }
 
 - (void)completeWithState:(UIGestureRecognizerState)state
 {
-	UIView *view = navigationController.topViewController.view.superview;
-	CGRect frame = view.frame;
-	frame.origin.x = (state == UIGestureRecognizerStateEnded) ? frame.size.width : 0.0f;
+	CGRect frame = movingView.frame;
+	if (state == UIGestureRecognizerStateEnded) {
+		frame.origin.x = (gestureIsRestoring && !isRoot) ? -frame.size.width : frame.size.width;
+	} else {
+		frame.origin.x = 0.0f;
+	}
 	NSTimeInterval duration = isRoot ? (1.0 / 5.0) : (1.0 / 3.0);
 	[UIView animateWithDuration:duration delay:0.0 options:UIViewAnimationOptionCurveEaseInOut animations:^{
 #ifdef USE_PRIVATE
@@ -109,55 +163,85 @@ __attribute__((visibility("hidden")))
 			[bar setLocked:0];
 			id delegate = bar.delegate;
 			bar.delegate = nil;
-			[bar popNavigationItemAnimated:YES];
+			if (gestureIsRestoring) {
+				[bar pushNavigationItem:restorableViewController.navigationItem animated:YES];
+			} else {
+				[bar popNavigationItemAnimated:YES];
+			}
 			bar.delegate = delegate;
 			[bar setLocked:1];
 		}
 #endif
-		view.frame = frame;
+		movingView.frame = frame;
 	} completion:NULL];
-	frame.size.width = 15.0f;
-	frame.origin.x -= 15.0f;
+	if (gestureIsRestoring) {
+		frame.origin.x += frame.size.width;
+		frame.size.width = 15.0f;
+	} else {
+		frame.size.width = 15.0f;
+		frame.origin.x -= 15.0f;
+	}
 	[CATransaction begin];
 	[CATransaction setAnimationDuration:duration];
 	[CATransaction setAnimationTimingFunction:[CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseInEaseOut]];
 	[CATransaction setCompletionBlock:^{
 		[gradientLayer removeFromSuperlayer];
+		[rightGradientLayer removeFromSuperlayer];
 		if (state == UIGestureRecognizerStateEnded) {
+			void (^animations)(void) = gestureIsRestoring ? ^{
+#ifdef USE_PRIVATE
+				NSMutableArray *viewControllers = [navigationController.viewControllers mutableCopy];
+				[viewControllers addObject:restorableViewController];
+				[navigationController setViewControllers:viewControllers animated:NO];
+#else
+				[navigationController pushViewController:restorableViewController animated:YES];
+#endif
+				[restorableViewController release];
+				restorableViewController = nil;
+			} : ^{
+#ifdef USE_PRIVATE
+				NSMutableArray *viewControllers = [navigationController.viewControllers mutableCopy];
+				UIViewController *viewController = [viewControllers lastObject];
+				[restorableViewController release];
+				restorableViewController = [viewController retain];
+				[viewControllers removeObjectAtIndex:viewControllers.count-1];
+				[viewController viewWillDisappear:NO];
+				[viewController viewDidDisappear:NO];
+				[navigationController setViewControllers:viewControllers animated:NO];
+				[viewControllers release];
+#else
+				[navigationController popViewControllerAnimated:NO];
+#endif
+			};
 			[UIView transitionWithView:navigationController.view
 			                  duration:1.0/4.0
 			                   options:UIViewAnimationOptionTransitionCrossDissolve
-			                animations:^
-				{
-#ifdef USE_PRIVATE
-					NSMutableArray *viewControllers = [navigationController.viewControllers mutableCopy];
-					UIViewController *viewController = [viewControllers lastObject];
-					[viewControllers removeObjectAtIndex:viewControllers.count-1];
-					[viewController viewWillDisappear:NO];
-					[viewController viewDidDisappear:NO];
-					[navigationController setViewControllers:viewControllers animated:NO];
-					[viewControllers release];
-#else
-					[navigationController popViewControllerAnimated:NO];
-#endif
-				}
+			                animations:animations
 			                completion:NULL];
-			[view removeFromSuperview];
+			[movingView removeFromSuperview];
 			[navigationController setNavigationBarHidden:NO animated:YES];
 		} else {
 			[underView removeFromSuperview];
 		}
 		[underView release];
 		underView = nil;
+		[movingView release];
+		movingView = nil;
 	}];
-	gradientLayer.frame = frame;
+	(gestureIsRestoring ? rightGradientLayer : gradientLayer).frame = frame;
 	[CATransaction commit];
 	self.state = state;
 }
 
 - (void)touchesEnded:(NSSet *)touches withEvent:(UIEvent *)event
 {
-	[self completeWithState:(([self locationInView:navigationController.view].x > 100.0f) && !isRoot) ? UIGestureRecognizerStateEnded : UIGestureRecognizerStateCancelled];
+	if (isRoot) {
+		[self completeWithState:UIGestureRecognizerStateCancelled];
+	} else if (gestureIsRestoring) {
+		[self completeWithState:([self locationInView:navigationController.view].x < navigationController.view.bounds.size.width - 100.0f) ? UIGestureRecognizerStateEnded : UIGestureRecognizerStateCancelled];
+	} else {
+		[self completeWithState:([self locationInView:navigationController.view].x > 100.0f) ? UIGestureRecognizerStateEnded : UIGestureRecognizerStateCancelled];
+	}
 }
 
 - (void)touchesCancelled:(NSSet *)touches withEvent:(UIEvent *)event
@@ -172,8 +256,11 @@ __attribute__((visibility("hidden")))
 
 - (void)dealloc
 {
+	[restorableViewController release];
 	[gradientLayer removeFromSuperlayer];
 	[gradientLayer release];
+	[movingView release];
+	[underView release];
 	[super dealloc];
 }
 

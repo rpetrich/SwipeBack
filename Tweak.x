@@ -16,6 +16,7 @@ __attribute__((visibility("hidden")))
 	UIViewController *restorableViewController;
 	CAGradientLayer *gradientLayer;
 	CAGradientLayer *rightGradientLayer;
+	CAGradientLayer *shadowLayer;
 	UIView *underView;
 	UIView *movingView;
 	CGFloat offset;
@@ -24,6 +25,8 @@ __attribute__((visibility("hidden")))
 }
 @property (nonatomic, assign) UINavigationController *navigationController;
 @property (nonatomic, retain) UIViewController *restorableViewController;
+@property (nonatomic, readonly) CAGradientLayer *gradientLayer;
+@property (nonatomic, readonly) CAGradientLayer *rightGradientLayer;
 @end
 
 @implementation SwipeBackGestureRecognizer
@@ -34,6 +37,28 @@ __attribute__((visibility("hidden")))
 - (BOOL)delaysTouchesBegan
 {
 	return YES;
+}
+
+- (CAGradientLayer *)gradientLayer
+{
+	if (!gradientLayer) {
+		gradientLayer = [[CAGradientLayer alloc] init];
+		gradientLayer.startPoint = (CGPoint){0.0f, 0.0f};
+		gradientLayer.endPoint = (CGPoint){1.0f, 0.0f};
+		gradientLayer.colors = [NSArray arrayWithObjects:(id)[[UIColor colorWithWhite:0.0f alpha:0.0f] CGColor], (id)[[UIColor colorWithWhite:0.0f alpha:0.1f] CGColor], (id)[[UIColor colorWithWhite:0.0f alpha:0.25f] CGColor], nil];
+	}
+	return gradientLayer;
+}
+
+- (CAGradientLayer *)rightGradientLayer
+{
+	if (!rightGradientLayer) {
+		rightGradientLayer = [[CAGradientLayer alloc] init];
+		rightGradientLayer.startPoint = (CGPoint){1.0f, 0.0f};
+		rightGradientLayer.endPoint = (CGPoint){0.0f, 0.0f};
+		rightGradientLayer.colors = [NSArray arrayWithObjects:(id)[[UIColor colorWithWhite:0.0f alpha:0.0f] CGColor], (id)[[UIColor colorWithWhite:0.0f alpha:0.1f] CGColor], (id)[[UIColor colorWithWhite:0.0f alpha:0.25f] CGColor], nil];
+	}
+	return rightGradientLayer;
 }
 
 - (void)touchesBegan:(NSSet *)touches withEvent:(UIEvent *)event
@@ -66,18 +91,14 @@ __attribute__((visibility("hidden")))
 #ifdef USE_PRIVATE
 			[viewController viewDidAppear:YES];
 #endif
-			if (!gradientLayer) {
-				gradientLayer = [[CAGradientLayer alloc] init];
-				gradientLayer.startPoint = (CGPoint){0.0f, 0.0f};
-				gradientLayer.endPoint = (CGPoint){1.0f, 0.0f};
-				gradientLayer.colors = [NSArray arrayWithObjects:(id)[[UIColor colorWithWhite:0.0f alpha:0.0f] CGColor], (id)[[UIColor colorWithWhite:0.0f alpha:0.1f] CGColor], (id)[[UIColor colorWithWhite:0.0f alpha:0.25f] CGColor], nil];
-			}
 			frame.size.width = 15.0f;
 			frame.origin.x -= 15.0f;
 			[CATransaction begin];
 			[CATransaction setValue:(id)kCFBooleanTrue forKey:kCATransactionDisableActions];
-			gradientLayer.frame = frame;
-			[view.superview.layer insertSublayer:gradientLayer below:view.layer];
+			shadowLayer = self.gradientLayer;
+			shadowLayer.opacity = 1.0f;
+			shadowLayer.frame = frame;
+			[view.superview.layer insertSublayer:shadowLayer below:view.layer];
 			[CATransaction commit];
 			gestureIsRestoring = NO;
 			self.state = UIGestureRecognizerStateBegan;
@@ -85,8 +106,6 @@ __attribute__((visibility("hidden")))
 		}
 		if (offset > navView.bounds.size.width - 10.0f) {
 			UIView *view = navigationController.topViewController.view.superview;
-			[movingView release];
-			movingView = [view retain];
 			view.clipsToBounds = YES;
 			CGRect frame = view.frame;
 			isRoot = !restorableViewController;
@@ -94,23 +113,29 @@ __attribute__((visibility("hidden")))
 			if (isRoot) {
 				underView = [[UIView alloc] initWithFrame:frame];
 				underView.backgroundColor = [UIColor scrollViewTexturedBackgroundColor];
+				[view.superview insertSubview:underView belowSubview:view];
+				[movingView release];
+				movingView = [view retain];
+				frame.origin.x -= frame.size.width;
+				[CATransaction begin];
+				[CATransaction setValue:(id)kCFBooleanTrue forKey:kCATransactionDisableActions];
+				shadowLayer = self.rightGradientLayer;
 			} else {
-				underView = [restorableViewController.view retain];
-				underView.frame = frame;
+				underView = [view retain];
+				movingView = [restorableViewController.view retain];
+				offset -= frame.size.width;
+				frame.origin.x += frame.size.width;
+				movingView.frame = frame;
+				[view.superview insertSubview:movingView aboveSubview:view];
+				frame.origin.x -= 15.0f;
+				[CATransaction begin];
+				[CATransaction setValue:(id)kCFBooleanTrue forKey:kCATransactionDisableActions];
+				shadowLayer = self.gradientLayer;
 			}
-			[view.superview insertSubview:underView belowSubview:view];
-			if (!rightGradientLayer) {
-				rightGradientLayer = [[CAGradientLayer alloc] init];
-				rightGradientLayer.startPoint = (CGPoint){1.0f, 0.0f};
-				rightGradientLayer.endPoint = (CGPoint){0.0f, 0.0f};
-				rightGradientLayer.colors = [NSArray arrayWithObjects:(id)[[UIColor colorWithWhite:0.0f alpha:0.0f] CGColor], (id)[[UIColor colorWithWhite:0.0f alpha:0.1f] CGColor], (id)[[UIColor colorWithWhite:0.0f alpha:0.25f] CGColor], nil];
-			}
-			frame.origin.x += frame.size.width;
 			frame.size.width = 15.0f;
-			[CATransaction begin];
-			[CATransaction setValue:(id)kCFBooleanTrue forKey:kCATransactionDisableActions];
-			rightGradientLayer.frame = frame;
-			[view.superview.layer insertSublayer:rightGradientLayer below:view.layer];
+			shadowLayer.opacity = 1.0f;
+			shadowLayer.frame = frame;
+			[view.superview.layer insertSublayer:shadowLayer below:movingView.layer];
 			[CATransaction commit];
 			gestureIsRestoring = YES;
 			self.state = UIGestureRecognizerStateBegan;
@@ -127,7 +152,7 @@ __attribute__((visibility("hidden")))
 	frame.origin.x = currentOffset - offset;
 	if (isRoot)
 		frame.origin.x *= (1.0f / 3.0f);
-	if (gestureIsRestoring) {
+	if (gestureIsRestoring && isRoot) {
 		if (frame.origin.x > 0.0f)
 			frame.origin.x = 0.0f;
 		movingView.frame = frame;
@@ -153,9 +178,9 @@ __attribute__((visibility("hidden")))
 {
 	CGRect frame = movingView.frame;
 	if (state == UIGestureRecognizerStateEnded) {
-		frame.origin.x = (gestureIsRestoring && !isRoot) ? -frame.size.width : frame.size.width;
+		frame.origin.x = (gestureIsRestoring && !isRoot) ? 0 : frame.size.width;
 	} else {
-		frame.origin.x = 0.0f;
+		frame.origin.x = (gestureIsRestoring && !isRoot) ? frame.size.width : 0.0f;
 	}
 	NSTimeInterval duration = isRoot ? (1.0 / 5.0) : (1.0 / 3.0);
 	[UIView animateWithDuration:duration delay:0.0 options:UIViewAnimationOptionCurveEaseInOut animations:^{
@@ -176,7 +201,7 @@ __attribute__((visibility("hidden")))
 #endif
 		movingView.frame = frame;
 	} completion:NULL];
-	if (gestureIsRestoring) {
+	if (gestureIsRestoring && isRoot) {
 		frame.origin.x += frame.size.width;
 		frame.size.width = 15.0f;
 	} else {
@@ -223,14 +248,15 @@ __attribute__((visibility("hidden")))
 			[movingView removeFromSuperview];
 			[navigationController setNavigationBarHidden:NO animated:YES];
 		} else {
-			[underView removeFromSuperview];
+			[(gestureIsRestoring && !isRoot) ? movingView : underView removeFromSuperview];
 		}
 		[underView release];
 		underView = nil;
 		[movingView release];
 		movingView = nil;
 	}];
-	(gestureIsRestoring ? rightGradientLayer : gradientLayer).frame = frame;
+	shadowLayer.frame = frame;
+	shadowLayer.opacity = 0.0f;
 	[CATransaction commit];
 	self.state = state;
 }

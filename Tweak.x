@@ -102,6 +102,7 @@ __attribute__((visibility("hidden")))
 			[CATransaction commit];
 			gestureIsRestoring = NO;
 			self.state = UIGestureRecognizerStateBegan;
+			navView.window.userInteractionEnabled = NO;
 			return;
 		}
 		if (offset > navView.bounds.size.width - 10.0f) {
@@ -139,6 +140,7 @@ __attribute__((visibility("hidden")))
 			[CATransaction commit];
 			gestureIsRestoring = YES;
 			self.state = UIGestureRecognizerStateBegan;
+			navView.window.userInteractionEnabled = NO;
 			return;
 		}
 	}
@@ -259,6 +261,7 @@ __attribute__((visibility("hidden")))
 	shadowLayer.opacity = 0.0f;
 	[CATransaction commit];
 	self.state = state;
+	navigationController.view.window.userInteractionEnabled = YES;
 }
 
 - (void)touchesEnded:(NSSet *)touches withEvent:(UIEvent *)event

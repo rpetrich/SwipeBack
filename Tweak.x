@@ -179,11 +179,7 @@ __attribute__((visibility("hidden")))
 - (void)completeWithState:(UIGestureRecognizerState)state
 {
 	CGRect frame = movingView.frame;
-	if (state == UIGestureRecognizerStateEnded) {
-		frame.origin.x = (gestureIsRestoring && !isRoot) ? 0 : frame.size.width;
-	} else {
-		frame.origin.x = (gestureIsRestoring && !isRoot) ? frame.size.width : 0.0f;
-	}
+	frame.origin.x = ((state == UIGestureRecognizerStateEnded) ^ (gestureIsRestoring && !isRoot)) ? frame.size.width : 0.0f;
 	NSTimeInterval duration = isRoot ? (1.0 / 5.0) : (1.0 / 3.0);
 	[UIView animateWithDuration:duration delay:0.0 options:UIViewAnimationOptionCurveEaseInOut animations:^{
 #ifdef USE_PRIVATE

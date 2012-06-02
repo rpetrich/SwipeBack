@@ -9,6 +9,12 @@
 #import <UIKit/UIKit2.h>
 #endif
 
+static inline CGFloat CGFloatRoundToScreenScale(CGFloat value)
+{
+	CGFloat scale = [UIScreen mainScreen].scale;
+	return roundf(value * scale) / scale;
+}
+
 __attribute__((visibility("hidden")))
 @interface SwipeBackGestureRecognizer : UIGestureRecognizer {
 @private
@@ -33,6 +39,31 @@ __attribute__((visibility("hidden")))
 
 @implementation SwipeBackGestureRecognizer
 
++ (NSArray *)gradientColors
+{
+	return [NSArray arrayWithObjects:
+		(id)[[UIColor colorWithWhite:0.0f alpha:0.0f] CGColor],
+		(id)[[UIColor colorWithWhite:0.0f alpha:0.1f] CGColor],
+		(id)[[UIColor colorWithWhite:0.0f alpha:0.25f] CGColor],
+		(id)[[UIColor colorWithWhite:0.0f alpha:0.4f] CGColor],
+		nil];
+}
+
++ (NSArray *)gradientLocations
+{
+	return [NSArray arrayWithObjects:
+		[NSNumber numberWithFloat:0.0f],
+		[NSNumber numberWithFloat:15.0f / 32.0f],
+		[NSNumber numberWithFloat:30.0f / 32.0f],
+		[NSNumber numberWithFloat:1.0f],
+		nil];
+}
+
++ (CGFloat)shadowSize
+{
+	return 20.0f;
+}
+
 @synthesize navigationController;
 @synthesize restorableViewController;
 
@@ -47,7 +78,8 @@ __attribute__((visibility("hidden")))
 		gradientLayer = [[CAGradientLayer alloc] init];
 		gradientLayer.startPoint = (CGPoint){0.0f, 0.0f};
 		gradientLayer.endPoint = (CGPoint){1.0f, 0.0f};
-		gradientLayer.colors = [NSArray arrayWithObjects:(id)[[UIColor colorWithWhite:0.0f alpha:0.0f] CGColor], (id)[[UIColor colorWithWhite:0.0f alpha:0.1f] CGColor], (id)[[UIColor colorWithWhite:0.0f alpha:0.25f] CGColor], nil];
+		gradientLayer.colors = [[self class] gradientColors];
+		gradientLayer.locations = [[self class] gradientLocations];
 	}
 	return gradientLayer;
 }
@@ -58,7 +90,8 @@ __attribute__((visibility("hidden")))
 		rightGradientLayer = [[CAGradientLayer alloc] init];
 		rightGradientLayer.startPoint = (CGPoint){1.0f, 0.0f};
 		rightGradientLayer.endPoint = (CGPoint){0.0f, 0.0f};
-		rightGradientLayer.colors = [NSArray arrayWithObjects:(id)[[UIColor colorWithWhite:0.0f alpha:0.0f] CGColor], (id)[[UIColor colorWithWhite:0.0f alpha:0.1f] CGColor], (id)[[UIColor colorWithWhite:0.0f alpha:0.25f] CGColor], nil];
+		rightGradientLayer.colors = [[self class] gradientColors];
+		rightGradientLayer.locations = [[self class] gradientLocations];
 	}
 	return rightGradientLayer;
 }
@@ -69,7 +102,8 @@ __attribute__((visibility("hidden")))
 		navigationBarShadow = [[CAGradientLayer alloc] init];
 		navigationBarShadow.startPoint = (CGPoint){0.0f, 1.0f};
 		navigationBarShadow.endPoint = (CGPoint){0.0f, 0.0f};
-		navigationBarShadow.colors = [NSArray arrayWithObjects:(id)[[UIColor colorWithWhite:0.0f alpha:0.0f] CGColor], (id)[[UIColor colorWithWhite:0.0f alpha:0.1f] CGColor], (id)[[UIColor colorWithWhite:0.0f alpha:0.25f] CGColor], nil];
+		navigationBarShadow.colors = [[self class] gradientColors];
+		navigationBarShadow.locations = [[self class] gradientLocations];
 	}
 	return navigationBarShadow;
 }
@@ -105,8 +139,9 @@ __attribute__((visibility("hidden")))
 			[viewController viewDidAppear:YES];
 #endif
 			CGRect shadowFrame = frame;
-			shadowFrame.size.width = 15.0f;
-			shadowFrame.origin.x -= 15.0f;
+			CGFloat shadowSize = [[self class] shadowSize];
+			shadowFrame.size.width = shadowSize;
+			shadowFrame.origin.x -= shadowSize;
 			[CATransaction begin];
 			[CATransaction setValue:(id)kCFBooleanTrue forKey:kCATransactionDisableActions];
 			shadowLayer = self.gradientLayer;
@@ -116,7 +151,7 @@ __attribute__((visibility("hidden")))
 			if (isRoot) {
 				CALayer *navShadow = self.navigationBarShadow;
 				shadowFrame = frame;
-				shadowFrame.size.height = 15.0f;
+				shadowFrame.size.height = shadowSize;
 				navShadow.frame = shadowFrame;
 				[view.superview.layer insertSublayer:navShadow below:view.layer];
 			}
@@ -132,6 +167,7 @@ __attribute__((visibility("hidden")))
 			CGRect frame = view.frame;
 			isRoot = !restorableViewController && (restorableViewController != navigationController.topViewController);
 			[underView release];
+			CGFloat shadowSize = [[self class] shadowSize];
 			CGRect shadowFrame = frame;
 			if (isRoot) {
 				underView = [[UIView alloc] initWithFrame:frame];
@@ -144,7 +180,7 @@ __attribute__((visibility("hidden")))
 				[CATransaction setValue:(id)kCFBooleanTrue forKey:kCATransactionDisableActions];
 				shadowLayer = self.rightGradientLayer;
 				CALayer *navShadow = self.navigationBarShadow;
-				shadowFrame.size.height = 15.0f;
+				shadowFrame.size.height = shadowSize;
 				navShadow.frame = shadowFrame;
 				[view.superview.layer insertSublayer:navShadow below:view.layer];
 			} else {
@@ -154,12 +190,12 @@ __attribute__((visibility("hidden")))
 				frame.origin.x += frame.size.width;
 				movingView.frame = frame;
 				[view.superview insertSubview:movingView aboveSubview:view];
-				frame.origin.x -= 15.0f;
+				frame.origin.x -= shadowSize;
 				[CATransaction begin];
 				[CATransaction setValue:(id)kCFBooleanTrue forKey:kCATransactionDisableActions];
 				shadowLayer = self.gradientLayer;
 			}
-			frame.size.width = 15.0f;
+			frame.size.width = shadowSize;
 			shadowLayer.opacity = 1.0f;
 			shadowLayer.frame = frame;
 			[view.superview.layer insertSublayer:shadowLayer below:movingView.layer];
@@ -180,12 +216,13 @@ __attribute__((visibility("hidden")))
 	frame.origin.x = currentOffset - offset;
 	if (isRoot)
 		frame.origin.x *= (1.0f / 3.0f);
+	frame.origin.x = CGFloatRoundToScreenScale(frame.origin.x);
 	if (gestureIsRestoring && isRoot) {
 		if (frame.origin.x > 0.0f)
 			frame.origin.x = 0.0f;
 		movingView.frame = frame;
 		frame.origin.x += frame.size.width;
-		frame.size.width = 15.0f;
+		frame.size.width = [[self class] shadowSize];
 		[CATransaction begin];
 		[CATransaction setValue:(id)kCFBooleanTrue forKey:kCATransactionDisableActions];
 		rightGradientLayer.frame = frame;
@@ -193,8 +230,8 @@ __attribute__((visibility("hidden")))
 		if (frame.origin.x < 0.0f)
 			frame.origin.x = 0.0f;
 		movingView.frame = frame;
-		frame.size.width = 15.0f;
-		frame.origin.x -= 15.0f;
+		frame.size.width = [[self class] shadowSize];
+		frame.origin.x -= frame.size.width;
 		[CATransaction begin];
 		[CATransaction setValue:(id)kCFBooleanTrue forKey:kCATransactionDisableActions];
 		gradientLayer.frame = frame;
@@ -227,10 +264,10 @@ __attribute__((visibility("hidden")))
 	} completion:NULL];
 	if (gestureIsRestoring && isRoot) {
 		frame.origin.x += frame.size.width;
-		frame.size.width = 15.0f;
+		frame.size.width = [[self class] shadowSize];
 	} else {
-		frame.size.width = 15.0f;
-		frame.origin.x -= 15.0f;
+		frame.size.width = [[self class] shadowSize];
+		frame.origin.x -= frame.size.width;
 	}
 	[CATransaction begin];
 	[CATransaction setAnimationDuration:duration];

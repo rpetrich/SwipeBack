@@ -130,7 +130,7 @@ __attribute__((visibility("hidden")))
 			UIView *view = navigationController.topViewController.view.superview;
 			view.clipsToBounds = YES;
 			CGRect frame = view.frame;
-			isRoot = !restorableViewController;
+			isRoot = !restorableViewController && (restorableViewController != navigationController.topViewController);
 			[underView release];
 			CGRect shadowFrame = frame;
 			if (isRoot) {

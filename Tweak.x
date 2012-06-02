@@ -269,6 +269,9 @@ __attribute__((visibility("hidden")))
 		frame.size.width = [[self class] shadowSize];
 		frame.origin.x -= frame.size.width;
 	}
+	if (state == UIGestureRecognizerStateEnded) {
+		[[[UIApplication sharedApplication] keyWindow] endEditing:YES];
+	}
 	[CATransaction begin];
 	[CATransaction setAnimationDuration:duration];
 	[CATransaction setAnimationTimingFunction:[CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseInEaseOut]];

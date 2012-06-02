@@ -277,29 +277,11 @@ __attribute__((visibility("hidden")))
 		[rightGradientLayer removeFromSuperlayer];
 		if (state == UIGestureRecognizerStateEnded) {
 			void (^animations)(void) = gestureIsRestoring ? ^{
-#ifdef USE_PRIVATE
-				NSMutableArray *viewControllers = [navigationController.viewControllers mutableCopy];
-				[viewControllers addObject:restorableViewController];
-				[navigationController setViewControllers:viewControllers animated:NO];
-#else
-				[navigationController pushViewController:restorableViewController animated:YES];
-#endif
+				[navigationController pushViewController:restorableViewController animated:NO];
 				[restorableViewController release];
 				restorableViewController = nil;
 			} : ^{
-#ifdef USE_PRIVATE
-				NSMutableArray *viewControllers = [navigationController.viewControllers mutableCopy];
-				UIViewController *viewController = [viewControllers lastObject];
-				[restorableViewController release];
-				restorableViewController = [viewController retain];
-				[viewControllers removeObjectAtIndex:viewControllers.count-1];
-				[viewController viewWillDisappear:NO];
-				[viewController viewDidDisappear:NO];
-				[navigationController setViewControllers:viewControllers animated:NO];
-				[viewControllers release];
-#else
 				[navigationController popViewControllerAnimated:NO];
-#endif
 			};
 			[UIView transitionWithView:navigationController.view
 			                  duration:1.0/4.0

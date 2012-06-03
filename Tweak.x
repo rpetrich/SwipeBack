@@ -15,10 +15,20 @@ static inline CGFloat CGFloatRoundToScreenScale(CGFloat value)
 	return roundf(value * scale) / scale;
 }
 
+@class SwipeBackGestureRecognizer;
+
+@protocol SwipeBackGestureRecognizerDelegate <NSObject>
+@required
+- (BOOL)swipeBackGestureRecognizerShouldInhibitGestures:(SwipeBackGestureRecognizer *)recognizer;
+- (BOOL)swipeBackGestureRecognizerShouldAllowSwipeBack:(SwipeBackGestureRecognizer *)recognizer;
+- (BOOL)swipeBackGestureRecognizerShouldAllowSwipeForward:(SwipeBackGestureRecognizer *)recognizer;
+@end
+
 __attribute__((visibility("hidden")))
 @interface SwipeBackGestureRecognizer : UIGestureRecognizer {
 @private
 	UINavigationController *navigationController;
+	id<SwipeBackGestureRecognizerDelegate> delegate;
 	UIViewController *restorableViewController;
 	CAGradientLayer *gradientLayer;
 	CAGradientLayer *rightGradientLayer;
@@ -31,6 +41,7 @@ __attribute__((visibility("hidden")))
 	BOOL gestureIsRestoring;
 }
 @property (nonatomic, assign) UINavigationController *navigationController;
+@property (nonatomic, assign) id<SwipeBackGestureRecognizerDelegate> delegate;
 @property (nonatomic, retain) UIViewController *restorableViewController;
 @property (nonatomic, readonly) CAGradientLayer *gradientLayer;
 @property (nonatomic, readonly) CAGradientLayer *rightGradientLayer;
@@ -66,6 +77,7 @@ __attribute__((visibility("hidden")))
 
 @synthesize navigationController;
 @synthesize restorableViewController;
+@synthesize delegate;
 
 - (BOOL)delaysTouchesBegan
 {
@@ -114,6 +126,8 @@ __attribute__((visibility("hidden")))
 	offset = [self locationInView:navView].x;
 	if (!navigationController.modalViewController) {
 		if (offset < 10.0f) {
+			if ([delegate swipeBackGestureRecognizerShouldInhibitGestures:self])
+				goto cancel;
 			NSArray *viewControllers = navigationController.viewControllers;
 			NSInteger viewControllerCount = viewControllers.count;
 			UIView *view = navigationController.topViewController.view.superview;
@@ -121,7 +135,7 @@ __attribute__((visibility("hidden")))
 			movingView = [view retain];
 			view.clipsToBounds = YES;
 			CGRect frame = view.frame;
-			isRoot = viewControllerCount < 2;
+			isRoot = (viewControllerCount < 2) || (delegate && ![delegate swipeBackGestureRecognizerShouldAllowSwipeBack:self]);
 			UIViewController *viewController = isRoot ? nil : [viewControllers objectAtIndex:viewControllerCount-2];
 #ifdef USE_PRIVATE
 			[viewController viewWillAppear:NO];
@@ -162,10 +176,12 @@ __attribute__((visibility("hidden")))
 			return;
 		}
 		if (offset > navView.bounds.size.width - 10.0f) {
+			if ([delegate swipeBackGestureRecognizerShouldInhibitGestures:self])
+				goto cancel;
 			UIView *view = navigationController.topViewController.view.superview;
 			view.clipsToBounds = YES;
 			CGRect frame = view.frame;
-			isRoot = !restorableViewController || ([navigationController.viewControllers indexOfObjectIdenticalTo:restorableViewController] != NSNotFound);
+			isRoot = !restorableViewController || ([navigationController.viewControllers indexOfObjectIdenticalTo:restorableViewController] != NSNotFound) || (delegate && ![delegate swipeBackGestureRecognizerShouldAllowSwipeForward:self]);
 			[underView release];
 			CGFloat shadowSize = [[self class] shadowSize];
 			CGRect shadowFrame = frame;
@@ -206,6 +222,7 @@ __attribute__((visibility("hidden")))
 			return;
 		}
 	}
+cancel:
 	self.state = UIGestureRecognizerStateFailed;
 }
 
@@ -249,14 +266,14 @@ __attribute__((visibility("hidden")))
 		if (state == UIGestureRecognizerStateEnded) {
 			UINavigationBar *bar = navigationController.navigationBar;
 			[bar setLocked:0];
-			id delegate = bar.delegate;
+			id oldDelegate = bar.delegate;
 			bar.delegate = nil;
 			if (gestureIsRestoring) {
 				[bar pushNavigationItem:restorableViewController.navigationItem animated:YES];
 			} else {
 				[bar popNavigationItemAnimated:YES];
 			}
-			bar.delegate = delegate;
+			bar.delegate = oldDelegate;
 			[bar setLocked:1];
 		}
 #endif
@@ -348,6 +365,31 @@ __attribute__((visibility("hidden")))
 
 static void *SwipeBackGestureRecognizerKey;
 
+@interface UINavigationController (SwipeBackGestureRecognizer) <SwipeBackGestureRecognizerDelegate>
+@end
+
+@implementation UINavigationController (SwipeBackGestureRecognizer)
+
+- (BOOL)swipeBackGestureRecognizerShouldInhibitGestures:(SwipeBackGestureRecognizer *)recognizer
+{
+	NSDictionary *settings = [NSDictionary dictionaryWithContentsOfFile:@"/var/mobile/Library/Preferences/com.rpetrich.swipeback.plist"];
+	NSString *key = [@"SBEnabled-" stringByAppendingString:[NSBundle mainBundle].bundleIdentifier];
+	id temp = [settings objectForKey:key];
+	return temp ? ![temp boolValue] : NO;
+}
+
+- (BOOL)swipeBackGestureRecognizerShouldAllowSwipeBack:(SwipeBackGestureRecognizer *)recognizer
+{
+	return YES;
+}
+
+- (BOOL)swipeBackGestureRecognizerShouldAllowSwipeForward:(SwipeBackGestureRecognizer *)recognizer
+{
+	return YES;
+}
+
+@end
+
 %hook UINavigationController
 
 - (void)viewDidLoad
@@ -359,6 +401,7 @@ static void *SwipeBackGestureRecognizerKey;
 		objc_setAssociatedObject(self, &SwipeBackGestureRecognizerKey, recognizer, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 	}
 	recognizer.navigationController = self;
+	recognizer.delegate = self;
 	[self.view addGestureRecognizer:recognizer];
 }
 
@@ -367,6 +410,7 @@ static void *SwipeBackGestureRecognizerKey;
 	SwipeBackGestureRecognizer *recognizer = objc_getAssociatedObject(self, &SwipeBackGestureRecognizerKey);
 	if (recognizer) {
 		recognizer.navigationController = nil;
+		recognizer.delegate = nil;
 		objc_setAssociatedObject(self, &SwipeBackGestureRecognizerKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 	}
 	%orig;

@@ -368,14 +368,19 @@ static void *SwipeBackGestureRecognizerKey;
 @interface UINavigationController (SwipeBackGestureRecognizer) <SwipeBackGestureRecognizerDelegate>
 @end
 
-@implementation UINavigationController (SwipeBackGestureRecognizer)
-
-- (BOOL)swipeBackGestureRecognizerShouldInhibitGestures:(SwipeBackGestureRecognizer *)recognizer
+static inline BOOL isEnabled()
 {
 	NSDictionary *settings = [NSDictionary dictionaryWithContentsOfFile:@"/var/mobile/Library/Preferences/com.rpetrich.swipeback.plist"];
 	NSString *key = [@"SBEnabled-" stringByAppendingString:[NSBundle mainBundle].bundleIdentifier];
 	id temp = [settings objectForKey:key];
-	return temp ? ![temp boolValue] : NO;
+	return temp ? [temp boolValue] : YES;
+}
+
+@implementation UINavigationController (SwipeBackGestureRecognizer)
+
+- (BOOL)swipeBackGestureRecognizerShouldInhibitGestures:(SwipeBackGestureRecognizer *)recognizer
+{
+	return !isEnabled();
 }
 
 - (BOOL)swipeBackGestureRecognizerShouldAllowSwipeBack:(SwipeBackGestureRecognizer *)recognizer
@@ -422,6 +427,31 @@ static void *SwipeBackGestureRecognizerKey;
 	SwipeBackGestureRecognizer *recognizer = objc_getAssociatedObject(self, &SwipeBackGestureRecognizerKey);
 	recognizer.restorableViewController = result;
 	return result;
+}
+
+%end
+
+%hook BrowserController
+
+- (void)scrollViewWillBeginDragging:(UIScrollView *)scrollView
+{
+	%orig;
+	scrollView.alwaysBounceHorizontal = isEnabled();
+}
+
+- (void)scrollViewDidEndDragging:(UIScrollView *)scrollView willDecelerate:(BOOL)decelerate
+{
+	if (isEnabled()) {
+		%orig;
+		CGFloat offset = scrollView.contentOffset.x;
+		if (offset < -25.0f) {
+			[self goBack];
+		} else if (offset > scrollView.bounds.size.width - scrollView.contentSize.width + 25.0f) {
+			[self goForward];
+		}
+	} else {
+		%orig;
+	}
 }
 
 %end

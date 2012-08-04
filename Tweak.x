@@ -364,6 +364,8 @@ cancel:
 @end
 
 static void *SwipeBackGestureRecognizerKey;
+static BOOL allowBackGesture;
+static BOOL allowForwardGesture;
 
 @interface UINavigationController (SwipeBackGestureRecognizer) <SwipeBackGestureRecognizerDelegate>
 @end
@@ -463,9 +465,9 @@ static inline BOOL isEnabled()
 	if (isEnabled()) {
 		%orig;
 		CGFloat offset = scrollView.contentOffset.x;
-		if (offset < -25.0f) {
+		if (allowBackGesture && (offset < -25.0f)) {
 			[self goBack];
-		} else if (offset > scrollView.bounds.size.width - scrollView.contentSize.width + 25.0f) {
+		} else if (allowForwardGesture && (offset > scrollView.contentSize.width - scrollView.bounds.size.width + 25.0f)) {
 			[self goForward];
 		}
 	} else {
@@ -474,3 +476,21 @@ static inline BOOL isEnabled()
 }
 
 %end
+
+@interface UIScrollViewPanGestureRecognizer : UIGestureRecognizer
+@property (nonatomic, readonly) UIScrollView *scrollView;
+@end
+
+%hook UIScrollViewPanGestureRecognizer
+
+- (void)touchesBegan:(NSSet *)touches withEvent:(UIEvent *)event
+{
+	UIScrollView *scrollView = self.scrollView;
+	CGPoint contentOffset = scrollView.contentOffset;
+	allowBackGesture = (contentOffset.x == 0.0f);
+	allowForwardGesture = (contentOffset.x == scrollView.contentSize.width - scrollView.bounds.size.width);
+	%orig();
+}
+
+%end
+

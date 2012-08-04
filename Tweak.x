@@ -400,14 +400,17 @@ static inline BOOL isEnabled()
 - (void)viewDidLoad
 {
 	%orig;
-	SwipeBackGestureRecognizer *recognizer = objc_getAssociatedObject(self, &SwipeBackGestureRecognizerKey);
-	if (!recognizer) {
-		recognizer = [[[SwipeBackGestureRecognizer alloc] init] autorelease];
-		objc_setAssociatedObject(self, &SwipeBackGestureRecognizerKey, recognizer, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+	UIView *view = self.view;
+	if ([view.gestureRecognizers count] == 0) {
+		SwipeBackGestureRecognizer *recognizer = objc_getAssociatedObject(self, &SwipeBackGestureRecognizerKey);
+		if (!recognizer) {
+			recognizer = [[[SwipeBackGestureRecognizer alloc] init] autorelease];
+			objc_setAssociatedObject(self, &SwipeBackGestureRecognizerKey, recognizer, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+		}
+		recognizer.navigationController = self;
+		recognizer.delegate = self;
+		[view addGestureRecognizer:recognizer];
 	}
-	recognizer.navigationController = self;
-	recognizer.delegate = self;
-	[self.view addGestureRecognizer:recognizer];
 }
 
 - (void)dealloc
@@ -427,6 +430,22 @@ static inline BOOL isEnabled()
 	SwipeBackGestureRecognizer *recognizer = objc_getAssociatedObject(self, &SwipeBackGestureRecognizerKey);
 	recognizer.restorableViewController = result;
 	return result;
+}
+
+%end
+
+%hook UIView
+
+- (void)addGestureRecognizer:(UIGestureRecognizer *)recognizer
+{
+	UIViewController *vc = [UIViewController viewControllerForView:self];
+	if (vc) {
+		SwipeBackGestureRecognizer *swipeRecognizer = objc_getAssociatedObject(vc, &SwipeBackGestureRecognizerKey);
+		if (swipeRecognizer != recognizer) {
+			[self removeGestureRecognizer:swipeRecognizer];
+		}
+	}
+	%orig();
 }
 
 %end

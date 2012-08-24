@@ -30,6 +30,7 @@ __attribute__((visibility("hidden")))
 	UINavigationController *navigationController;
 	id<SwipeBackGestureRecognizerDelegate> delegate;
 	UIViewController *restorableViewController;
+	id restorableData;
 	CAGradientLayer *gradientLayer;
 	CAGradientLayer *rightGradientLayer;
 	CAGradientLayer *shadowLayer;
@@ -43,9 +44,28 @@ __attribute__((visibility("hidden")))
 @property (nonatomic, assign) UINavigationController *navigationController;
 @property (nonatomic, assign) id<SwipeBackGestureRecognizerDelegate> delegate;
 @property (nonatomic, retain) UIViewController *restorableViewController;
+@property (nonatomic, retain) id restorableData;
 @property (nonatomic, readonly) CAGradientLayer *gradientLayer;
 @property (nonatomic, readonly) CAGradientLayer *rightGradientLayer;
 @property (nonatomic, readonly) CAGradientLayer *navigationBarShadow;
+@end
+
+@interface UIViewController (SwipeBackGestureRecognizerRestorableData)
+- (id)restorableDataForSwipeBackGestureRecognizer:(SwipeBackGestureRecognizer *)recognizer;
+- (void)restoreWithData:(id)data fromSwipeBackGestureRecognizer:(SwipeBackGestureRecognizer *)recognizer;
+@end
+
+@implementation UIViewController (SwipeBackGestureRecognizerRestorableData)
+
+- (id)restorableDataForSwipeBackGestureRecognizer:(SwipeBackGestureRecognizer *)recognizer
+{
+	return nil;
+}
+
+- (void)restoreWithData:(id)data fromSwipeBackGestureRecognizer:(SwipeBackGestureRecognizer *)recognizer
+{
+}
+
 @end
 
 @implementation SwipeBackGestureRecognizer
@@ -77,6 +97,7 @@ __attribute__((visibility("hidden")))
 
 @synthesize navigationController;
 @synthesize restorableViewController;
+@synthesize restorableData;
 @synthesize delegate;
 
 - (BOOL)delaysTouchesBegan
@@ -298,6 +319,9 @@ cancel:
 		if (state == UIGestureRecognizerStateEnded) {
 			void (^animations)(void) = gestureIsRestoring ? ^{
 				[navigationController pushViewController:restorableViewController animated:NO];
+				[restorableViewController restoreWithData:restorableData fromSwipeBackGestureRecognizer:self];
+				[restorableData release];
+				restorableData = nil;
 				[restorableViewController release];
 				restorableViewController = nil;
 			} : ^{
@@ -350,6 +374,7 @@ cancel:
 - (void)dealloc
 {
 	[restorableViewController release];
+	[restorableData release];
 	[navigationBarShadow removeFromSuperlayer];
 	[navigationBarShadow release];
 	[rightGradientLayer removeFromSuperlayer];
@@ -431,6 +456,7 @@ static inline BOOL isEnabled()
 	UIViewController *result = %orig;
 	SwipeBackGestureRecognizer *recognizer = objc_getAssociatedObject(self, &SwipeBackGestureRecognizerKey);
 	recognizer.restorableViewController = result;
+	recognizer.restorableData = [result restorableDataForSwipeBackGestureRecognizer:recognizer];
 	return result;
 }
 
@@ -496,3 +522,20 @@ static inline BOOL isEnabled()
 
 %end
 
+@interface CKTranscriptController : UIViewController
+@property (nonatomic, retain) id conversation;
+@end
+
+%hook CKTranscriptController
+
+- (id)restorableDataForSwipeBackGestureRecognizer:(SwipeBackGestureRecognizer *)recognizer
+{
+	return [self conversation];
+}
+
+- (void)restoreWithData:(id)data fromSwipeBackGestureRecognizer:(SwipeBackGestureRecognizer *)recognizer
+{
+	[self setConversation:data];
+}
+
+%end

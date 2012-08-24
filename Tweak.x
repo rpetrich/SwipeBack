@@ -440,11 +440,13 @@ static inline BOOL isEnabled()
 
 - (void)addGestureRecognizer:(UIGestureRecognizer *)recognizer
 {
-	UIViewController *vc = [UIViewController viewControllerForView:self];
-	if (vc) {
-		SwipeBackGestureRecognizer *swipeRecognizer = objc_getAssociatedObject(vc, &SwipeBackGestureRecognizerKey);
-		if (swipeRecognizer != recognizer) {
-			[self removeGestureRecognizer:swipeRecognizer];
+	if ([recognizer isKindOfClass:[UITapGestureRecognizer class]]) {
+		UIViewController *vc = [UIViewController viewControllerForView:self];
+		if (vc) {
+			SwipeBackGestureRecognizer *swipeRecognizer = objc_getAssociatedObject(vc, &SwipeBackGestureRecognizerKey);
+			if (swipeRecognizer) {
+				[self removeGestureRecognizer:swipeRecognizer];
+			}
 		}
 	}
 	%orig();
